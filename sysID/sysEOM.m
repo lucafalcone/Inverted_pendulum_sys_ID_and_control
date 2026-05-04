@@ -1,4 +1,6 @@
-function [x_dot] = sysEOM(param, x, u)
+function [x_dot, y] = sysEOM(param, x, u)
+% x = [x, v, \theta, \omega]
+% y = sensor data (position and angle)
 
 M   = param.M;
 m   = param.m;
@@ -19,4 +21,5 @@ x_dot(2) = ( m*l^2 * phi  -  m*l*cos(x(3)) * psi ) / D;
 x_dot(3) = x(4);
 x_dot(4) = ( (M+m) * psi  -  m*l*cos(x(3)) * phi ) / D;
 
+y = [x(1), x(3)]';
 end
