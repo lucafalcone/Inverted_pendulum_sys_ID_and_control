@@ -2,11 +2,11 @@ clear
 clc
 
 h = 0.01;
-Tsim = 10;
-x0 = [0 0 0 0]';
+Tsim = 20;
+x0 = [0 0.1 0.2 -0.1]';
 
 t_u = (0:h:Tsim)';
-u = timeseries(1*sin(2*pi*t_u), t_u);
+v = timeseries(2*sin(2*pi*t_u) + 1*sin(10*pi*t_u), t_u);
 
 param.M   = 0.2;     % cart mass [kg]
 param.m   = 0.05;    % pendulum mass [kg]
@@ -16,9 +16,14 @@ param.c   = 0.005;   % cart damping
 param.l   = 0.2;     % pendulum length [m]
 param.k_m = 1.0;     % motor gain
 
+Q = diag([10, 1, 100, 1]);
+R = 1;
+load('linearized_system')
+K = -lqr(linsys1, Q, R);
+
 disp('simulating ...')
 
-output = sim('simulated_system');
+output = sim('simulated_system_LQR');
 
 disp('plotting ...')
 
@@ -27,8 +32,8 @@ visualize_trajectory(output.tout, output.x, param)
 disp('saving data ...')
 
 timestamp = char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'));
-filename = sprintf('sim_%s.mat', timestamp);
+filename = sprintf('simLQR_%s.mat', timestamp);
 save(fullfile(pwd, 'simulated_system', 'sim_results', filename), ...
-    'output', 'u', 'param')
+    'output', 'v', 'param', 'Q', 'R', 'K')
 
 disp('DONE')
