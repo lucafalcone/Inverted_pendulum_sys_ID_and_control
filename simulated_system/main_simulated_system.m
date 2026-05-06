@@ -6,7 +6,11 @@ Tsim = 10;
 x0 = [0 0 0 0]';
 
 t_u = (0:h:Tsim)';
-u = timeseries(1*sin(1*pi*t_u), t_u);
+A = 1;
+T_doublet = 1;
+u = @(t) A .* (t >= 0 & t < T_doublet) + ...
+    -A .* (t >= T_doublet & t < 2*T_doublet);
+u = timeseries(u(t_u),t_u);
 
 param.M   = 0.2;     % cart mass [kg]
 param.m   = 0.05;    % pendulum mass [kg]
@@ -19,21 +23,3 @@ param.k_m = 1.0;     % motor gain
 save_results = true;
 view_traj = true;
 out = simulate_system(h, Tsim, x0, u, param, save_results, view_traj);
-
-
-% disp('simulating ...')
-% 
-% output = sim('simulated_system');
-% 
-% disp('plotting ...')
-% 
-% visualize_trajectory(output.tout, output.x, param)
-% 
-% disp('saving data ...')
-% 
-% timestamp = char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'));
-% filename = sprintf('sim_%s.mat', timestamp);
-% save(fullfile(pwd, 'simulated_system', 'sim_results', filename), ...
-%     'output', 'u', 'param')
-% 
-% disp('DONE')
