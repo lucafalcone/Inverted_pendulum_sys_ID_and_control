@@ -2,9 +2,9 @@
 clear
 clc
 
-exptype = 3;
+exptype = 9;
 h = 0.01;
-T = 120;
+T = 20;
 
 t = (0:h:T)';
 
@@ -35,6 +35,26 @@ switch exptype
         A = -0.5;
         u = @(t) A .* (t >= 1 & t < 10);
         u = timeseries(u(t),t);
+    case 5
+        inputtype = 'fixedCart';
+        u = @(t) t .* 0;
+        u = timeseries(u(t),t);
+    case 6
+        inputtype = '1sin1';
+        u = @(t) 1*sin(1*pi*t);
+        u = timeseries(u(t),t);
+    case 7
+        inputtype = '1sin2';
+        u = @(t) 1*sin(2*pi*t);
+        u = timeseries(u(t),t);
+    case 8
+        inputtype = '1sin4';
+        u = @(t) 1*sin(4*pi*t);
+        u = timeseries(u(t),t);
+    case 9
+        inputtype = 'multisin';
+        u = @(t) 0.5*sin(0.7*pi*t) + 0.5*sin(1.25*pi*t) + 0.5*sin(3.24*pi*t);
+        u = timeseries(u(t),t);
 end
 
 
@@ -46,6 +66,6 @@ disp('done loading')
 %% SAVE OUTPUT DATA 
 timestamp = char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'));
 filename = sprintf('%s_%s.mat', inputtype, timestamp);
-save(fullfile(pwd, 'real_data', filename), 'outu', 'x', 'theta')
+save(fullfile(pwd, 'real_data', filename), 'outu', 'x', 'theta', 't')
 
 disp('saved data')
