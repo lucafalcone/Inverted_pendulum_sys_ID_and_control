@@ -1,4 +1,4 @@
-clear
+lear
 clc
 
 h = 0.01;
