@@ -69,6 +69,6 @@ disp('done loading')
 timestamp = char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'));
 filename = sprintf('%s_%s.mat', inputtype, timestamp);
 x = x - x(1);
-save(fullfile(pwd, 'real_data', filename), 'outu', 'x', 'theta', 't')
+save(fullfile(pwd, 'sysID','real_data', filename), 'outu', 'x', 'theta', 't')
 
 disp('saved data')
