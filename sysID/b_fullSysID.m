@@ -1,14 +1,15 @@
 clear
 clc
 
+shall_plot = 1;
 N = 500;
 skip = 0;
 % list of data files to use for ID
 data_files = { ...
     'real_data\chirp1_20260508_200223.mat', ...
     'real_data\chirp2_20260508_200322.mat', ...
-    % 'real_data\1sin1_20260506_191241.mat', ...
-    % 'real_data\1sin2_20260506_190731.mat', ...
+    'real_data\1sin1_20260506_191241.mat', ...
+    'real_data\1sin2_20260506_190731.mat', ...
     % 'real_data\1sin4_20260506_191140.mat', ...
     % 'real_data\multisin_20260506_191743.mat', ...
     % 'real_data\1_05_Doub_20260506_190103.mat', ...
@@ -33,22 +34,23 @@ data_merged = merge(data_set{:});
 
 % creating the object for parameter estimation
 order = [2 1 4]; % [output input states]
-%         [M,   m,      b, c,    l,  k_pos, k_neg, d_pos, d_neg,  Fc]
-params0 = [1, 0.1, 0.0005, 1, 0.38,    3,     3,    0.05,  0.05, 0.5]; % initial guess
+%         [M,   m,      b, c,    l,  k_pos, k_neg, d_pos, d_neg,  Fc,    Ft]
+params0 = [1, 0.1, 0.0005, 1, 0.38,    3,     3,    0.05,  0.05, 0.5, -0.03]; % initial guess
 
 % per-experiment initial state: pass Nx-by-Ne matrix straight to the constructor
 sys0 = idnlgrey('sysEOM_asym', order, params0, x0_mat, 0);
 
-sys0.Parameters(1).Minimum = 0;    % sys0.Parameters(1).Maximum = 3;
-sys0.Parameters(2).Minimum = 0;    % sys0.Parameters(2).Maximum = 1;
-sys0.Parameters(3).Minimum = 0;    % sys0.Parameters(3).Maximum = 0.5;
-sys0.Parameters(4).Minimum = 0;    % sys0.Parameters(4).Maximum = 10;
-sys0.Parameters(5).Minimum = 0.3;  % sys0.Parameters(5).Maximum = 0.45;
-sys0.Parameters(6).Minimum = 0;    % k_pos
-sys0.Parameters(7).Minimum = 0;    % k_neg
-sys0.Parameters(8).Minimum = 0;    % d_pos
-sys0.Parameters(9).Minimum = 0;    % d_neg
-sys0.Parameters(10).Minimum = 0;   % Fc (Coulomb friction)
+sys0.Parameters(1).Minimum = 0.5;  sys0.Parameters(1).Maximum = 1;
+sys0.Parameters(2).Minimum = 0;    sys0.Parameters(2).Maximum = 0.3;
+sys0.Parameters(3).Minimum = 0;    sys0.Parameters(3).Maximum = 0.02;
+sys0.Parameters(4).Minimum = 0;    sys0.Parameters(4).Maximum = 2;
+sys0.Parameters(5).Minimum = 0.35; sys0.Parameters(5).Maximum = 0.45;
+sys0.Parameters(6).Minimum = 1;    sys0.Parameters(6).Maximum = 5;
+sys0.Parameters(7).Minimum = 1;    sys0.Parameters(7).Maximum = 5;
+sys0.Parameters(8).Minimum = 0;    sys0.Parameters(8).Maximum = 0.3;
+sys0.Parameters(9).Minimum = 0;    sys0.Parameters(9).Maximum = 0.3;
+sys0.Parameters(10).Minimum = 0;   sys0.Parameters(10).Maximum = 2;
+sys0.Parameters(11).Minimum = -0.3;  sys0.Parameters(11).Maximum = 0.3;
 
 % positions fixed to measured values, velocities free
 sys0.InitialStates(1).Fixed = true;
@@ -100,9 +102,11 @@ param.k_neg = sys_id_vec(7);
 param.d_pos = sys_id_vec(8);
 param.d_neg = sys_id_vec(9);
 param.Fc    = sys_id_vec(10);
+param.Ft = sys_id_vec(11);
 disp(param);
 
 % per-file plots: input, x (real vs model), theta (real vs model), errors
+if shall_plot
 for i = 1:n_data
     t_i        = (0:size(data_set{i}.OutputData,1)-1)' * data_set{i}.Ts;
     u_i        = data_set{i}.InputData;
@@ -131,4 +135,5 @@ for i = 1:n_data
     plot(t_i, e_x_n, 'b', t_i, e_theta_n, 'r'); grid on;
     ylabel('error / std'); xlabel('t [s]');
     legend('x error','\theta error','Location','best');
+end
 end

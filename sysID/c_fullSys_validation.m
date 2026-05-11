@@ -1,6 +1,5 @@
-% clear
-% clc
-
+shall_plot = 1;
+save_param = 0;
 N = 500;
 skip = 500;
 % list of data files to use for validation (should NOT overlap with ID set)
@@ -11,11 +10,9 @@ data_files = {
     'real_data\multisin_20260506_191743.mat', ...
 };
 
-% load identified parameters (expects struct `param` with
-% M, m, b, c, l, k_pos, k_neg, d_pos, d_neg, Fc)
-% load('param.mat');
 params_id = [param.M, param.m, param.b, param.c, param.l, ...
-             param.k_pos, param.k_neg, param.d_pos, param.d_neg, param.Fc];
+             param.k_pos, param.k_neg, param.d_pos, param.d_neg, ...
+             param.Fc, param.Ft];
 
 % create id data objects + remember each file's measured initial state
 n_data = numel(data_files);
@@ -28,7 +25,7 @@ for i = 1:n_data
     data_set{i} = iddata(x_vec, outu_i, (S.t(2) - S.t(1)));
     x0_set{i} = [S.x(1+skip); 0; S.theta(1+skip); 0]; % measured pos, zero velocity guess
 end
-
+K = lqr(lin_ss,)
 % build the model with the identified parameters (no estimation)
 order = [2 1 4]; % [output input states]
 sys_id = idnlgrey('sysEOM_asym', order, params_id, zeros(4,1), 0); % placeholder x0; overwritten per experiment below
@@ -51,6 +48,8 @@ end
 disp('the average fit on validation data is: ')
 disp([num2str(mean(fit_vec)),'%'])
 
+% plotting
+if shall_plot
 for i = 1:n_data
     for k = 1:4
         sys_id.InitialStates(k).Value = x0_set{i}(k);
@@ -59,8 +58,12 @@ for i = 1:n_data
     compare(data_set{i}, sys_id);
     title(data_files{i}, 'Interpreter', 'none');
 end
+end
 
+% saving parameters
+if save_param
 folder = fullfile(pwd, 'sysID', 'results');
 str = strrep(sprintf('%.3f', mean(fit_vec)), '.', '_');
 filename = fullfile(folder, ['param_', str, '.mat']);
 save(filename, 'param');
+end
