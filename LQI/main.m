@@ -1,5 +1,5 @@
 %% LQR + steady-state Kalman design for the inverted pendulum
-% Linearizes sysEOM_asym about the UPRIGHT equilibrium (theta = pi),
+% Linearizes sysEOM_asym about the UPRIGHT equilibrium,
 % with the cart FORCE F as the control input (motor dead zone inverted
 % downstream in Simulink). Exports K, L, A, B, C and the dead-zone
 % compensation constants for the Simulink model.
@@ -19,14 +19,14 @@ end
 
 M     = p.M;
 m     = p.m;
-b     = p.b;     % pendulum pivot viscous friction
-c     = p.c;     % cart viscous friction
+b     = p.b;     % pendulum pivot friction
+c     = p.c;     % cart friction
 l     = p.l;
 k_pos = p.k_pos;
 k_neg = p.k_neg;
 d_pos = p.d_pos;
 d_neg = p.d_neg;
-Fc    = p.Fc;    % Coulomb cart friction (ignored in linearization)
+Fc    = p.Fc;    % Coulomb cart friction (ignored in linearization or it would be almost "discontinuous" at the equilibrium)
 
 g = 9.81;
 
@@ -37,7 +37,7 @@ g = 9.81;
 
 f = @(z, F) eom_force(z, F, M, m, b, c, l);
 
-z_eq = [0; 0; 0; 0];   % upright, at rest, at origin (in phi coordinates)
+z_eq = [0; 0; 0; 0];
 F_eq = 0;
 
 eps_j = 1e-6;
@@ -133,24 +133,4 @@ figure('Name','Linear LQR+KF closed loop');
 subplot(2,1,1); plot(t, y_sim(:,1)); ylabel('x [m]'); grid on;
 title('Linear closed-loop response from initial tilt');
 subplot(2,1,2); plot(t, y_sim(:,2)); ylabel('\phi [rad]'); xlabel('t [s]'); grid on;
-end
-
-%% ---- local function: EOM with force as input (theta = pi + phi) ----
-function dz = eom_force(z, F, M, m, b, c, l)
-    g = 9.81;
-    x_v   = z(2);
-    phi   = z(3);
-    omega = z(4);
-    theta = pi + phi;            % map back to original angle convention
-
-    Delta = M + m*sin(theta)^2;
-    num1  = F - c*x_v - m*l*omega^2*sin(theta) ...
-            - m*g*cos(theta)*sin(theta) - (b/l)*cos(theta)*omega;
-    num2  = m*l*cos(theta)*num1 - (M+m)*(m*g*l*sin(theta) + b*omega);
-
-    dz = zeros(4,1);
-    dz(1) = x_v;
-    dz(2) = num1 / Delta;
-    dz(3) = omega;
-    dz(4) = num2 / (m*l^2 * Delta);
 end
