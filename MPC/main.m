@@ -1,9 +1,9 @@
 clear; clc;
 h = 0.01;
-T = 100;
+T = 30;
 
 % to specify:
-params.Q = diag([ 30      0.1     200    1   ]);
+params.Q = diag([ 30      0.1     200    1 ]);
 params.R = 3;
 limits.u_max = 2;
 limits.x_max = 1923047;
@@ -114,10 +114,7 @@ disp('done')
 
 %% GO
 mname = 'inverted_pendulum_template';
-rtwbuild(mname);
-load_system(mname)
-set_param(mname, 'SimulationCommand', 'connect')
-set_param(mname, 'SimulationCommand', 'start')
+play_run(mname)
 
 
 
