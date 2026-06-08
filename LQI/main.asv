@@ -7,9 +7,9 @@
 
 clear; clc;
 h = 0.01;
-T = 10;
+T = 15;
 run_setup = 1; % set to 0 to run a simulation instead
-compare_kalman = 0;
+compare = 1;
 
 % add path to the EOM and other functions, assuming this script is in LQI/
 proj_root = fileparts(fileparts(mfilename('fullpath')));
@@ -59,8 +59,8 @@ sys_aug_c = ss(A_aug, B_aug, eye(5), zeros(5,1));
 sys_aug_d = c2d(sys_aug_c, h);     % ZOH discretisation
 
 % Tune weights. The last diagonal entry weights the integral state xi.
-Q_lqi = diag([30, 0.1, 200, 1, 100000]);   % [x  v  theta  omega  xi]
-R_lqi = 50;                             % force penalty (same as before)
+Q_lqi = diag([30, 0.1, 200, 1, 5]);   % [x  v  theta  omega  xi]
+R_lqi = 3;                             % force penalty (same as before)
 
 K_lqi = dlqr(sys_aug_d.A, sys_aug_d.B, Q_lqi, R_lqi);   % 1×5
 
@@ -71,14 +71,14 @@ disp(eig(sys_aug_d.A - sys_aug_d.B * K_lqi));
 %% 4) Kalman filter (steady-state, continuous LQE)
 % Quantization noise: sigma^2 = delta^2/12
 % delta_x = 5.9e-5 m/count, delta_theta = 1.534e-3 rad/count (inferred from data)
-R_kf = diag([1e-6, 1e-05]);
+R_kf = diag([1e-10, 1e-04]);
 
 % Process noise: treat unmodeled accelerations as white noise entering v
 % and omega. Tune q_v, q_w by comparing the estimated velocities against
 % a low-pass-filtered finite difference of the measurements.
-q_v = 1e-3;   % cart acceleration noise PSD
-q_w = 1e-2;   % pendulum angular-acceleration noise PSD
-Q_kf = diag([1e-8, q_v, 1e-12, q_w]);
+q_v = 1e-2;   % cart acceleration noise PSD
+q_w = 1;   % pendulum angular-acceleration noise PSD
+Q_kf = diag([1e-8, q_v, 1e-10, q_w]);
 
 % dlqe: process noise enters all 4 states directly (G = eye(4)).
 % Q_kf treated as discrete covariance; scale by h if Q was a continuous PSD.
@@ -149,7 +149,7 @@ end
 
 
 %% 7) comparison
-if compare_kalman
+if compare 
     pause(T+2)
     figure
     

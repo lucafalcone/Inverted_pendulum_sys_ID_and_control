@@ -56,7 +56,7 @@ switch exptype
         u = @(t) chirp(t,0.5,20,4,'linear');    
     case 11
         inputtype = 'chirp2';
-        u = @(t) chirp(t,0.25,20,3,'linear');
+        u = @(t) 0.8*chirp(t,0.25,T,1,'linear');
 end
 u = timeseries(u(t),t);
 
