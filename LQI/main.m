@@ -9,7 +9,7 @@ clear; clc;
 h = 0.01;
 T = 10;
 run_setup = 1; % set to 0 to run a simulation instead
-plot_figures = 1;
+plot_figures = 1; % set to 0 to skip the Kalman comparison and augmented state plots at the end
 
 % add path to the EOM and other functions, assuming this script is in LQI/
 proj_root = fileparts(fileparts(mfilename('fullpath')));
@@ -63,14 +63,23 @@ sys_aug_c = ss(A_aug, B_aug, eye(5), zeros(5,1));
 sys_aug_d = c2d(sys_aug_c, h);     % ZOH discretisation
 
 % Tune weights. The last diagonal entry weights the integral state xi.
-Q_lqi = diag([30, 0.1, 200, 1, 2e5]);   % [x  v  theta  omega  xi]
-R_lqi = 1000;                             % force penalty (same as before)
+Q_lqi = diag([30, 0.1, 200, 1, 1e5]);   % [x  v  theta  omega  xi]
+R_lqi = 50;                             % force penalty (same as before)
+
 
 K_lqi = dlqr(sys_aug_d.A, sys_aug_d.B, Q_lqi, R_lqi);   % 1×5
 
 fprintf('LQI gain K_lqi (F = -K_lqi * [x; v; theta; omega; xi]):\n'); disp(K_lqi);
 fprintf('Closed-loop poles (augmented discrete):\n');
 disp(eig(sys_aug_d.A - sys_aug_d.B * K_lqi));
+
+%% Random noise for System ID
+N_samples = T / h;
+t_prbs = (0:N_samples-1)' * h;
+
+% Generate the PRBS signal
+prbs_data = idinput(N_samples, 'PRBS', [0 0.2], [-1 1]);
+prbs_ts = timeseries(prbs_data, t_prbs);
 
 %% 4) Kalman filter (steady-state, continuous LQE)
 % Quantization noise: sigma^2 = delta^2/12
@@ -107,7 +116,7 @@ ctrl.d_neg = p.d_neg; d_neg = p.d_neg;
 
 % other stuff to save for Simulink
 ctrl.A = sys_d.A; ctrl.B = sys_d.B; ctrl.C = sys_d.C;
-ctrl.K = K_lqi; ctrl.L = L;
+ctrl.K_lqi = K_lqi; ctrl.L = L;
 ctrl.Q_lqi = Q_lqi; ctrl.R_lqi = R_lqi;
 ctrl.Q_kf  = Q_kf;  ctrl.R_kf  = R_kf;
 
