@@ -9,19 +9,23 @@ clear; clc;
 h = 0.01;
 T = 10;
 run_setup = 1; % set to 0 to run a simulation instead
-compare_kalman = 0;
+plot_figures = 1;
 
 % add path to the EOM and other functions, assuming this script is in LQI/
 proj_root = fileparts(fileparts(mfilename('fullpath')));
 addpath(fullfile(proj_root, 'LQI', 'functions'));
+addpath(fullfile(proj_root, 'global'));
+
+results_dir = fullfile(proj_root, 'LQI', 'results');
+if ~exist(results_dir, 'dir'), mkdir(results_dir); end
 
 %% 1) Load identified parameters
-p = load(fullfile(proj_root, 'sysID', 'results', 'param_64_175.mat')).param;
+p = load(fullfile(proj_root, 'global', 'param_64_175.mat')).param;
 p.g = 9.81;
 
 %% 2) Linearize about the upright equilibrium
-% State: z = [x; v; phi; omega], with phi = theta - pi (so phi = 0 is upright)
-% Input: F (force on cart, in Newtons). Outputs: y = [x; phi].
+% State: z = [x; v; theta; omega], with theta = theta - pi (so theta = 0 is upright)
+% Input: F (force on cart, in Newtons). Outputs: y = [x; theta].
 % Numerical Jacobian of the continuous EOM with F as input.
 
 f = @(z, F) eom_force(z, F, p.M, p.m, p.b, p.c, p.l);
@@ -59,8 +63,8 @@ sys_aug_c = ss(A_aug, B_aug, eye(5), zeros(5,1));
 sys_aug_d = c2d(sys_aug_c, h);     % ZOH discretisation
 
 % Tune weights. The last diagonal entry weights the integral state xi.
-Q_lqi = diag([30, 0.1, 200, 1, 100000]);   % [x  v  theta  omega  xi]
-R_lqi = 50;                             % force penalty (same as before)
+Q_lqi = diag([30, 0.1, 200, 1, 2e5]);   % [x  v  theta  omega  xi]
+R_lqi = 1000;                             % force penalty (same as before)
 
 K_lqi = dlqr(sys_aug_d.A, sys_aug_d.B, Q_lqi, R_lqi);   % 1×5
 
@@ -107,13 +111,13 @@ ctrl.K = K_lqi; ctrl.L = L;
 ctrl.Q_lqi = Q_lqi; ctrl.R_lqi = R_lqi;
 ctrl.Q_kf  = Q_kf;  ctrl.R_kf  = R_kf;
 
-out_file = fullfile(proj_root, 'LQI', 'lqr_kalman.mat');
+out_file = fullfile(results_dir, 'lqr_kalman.mat');
 save(out_file, '-struct', 'ctrl');
 fprintf('\nSaved controller + observer to %s\n', out_file);
 
 %% 6) Run setup or simulate to check the design
 if run_setup
-    mname = 'inverted_pendulum_template';
+    mname = 'inverted_pendulum_LQR';
     play_run(mname)
 else
     % Quick sanity sim of the linear closed loop (discrete LQI + Kalman)
@@ -139,60 +143,18 @@ else
         xi(k+1)     = xi(k) + h * (-q_hat(1,k));              % xi_dot = x_ref - x_hat
     end
 
-    figure('Name','Linear LQI+KF closed loop');
+    fig_sim = figure('Name','Linear LQI+KF closed loop');
     subplot(3,1,1); plot(t, q(1,:)); ylabel('x [m]'); grid on;
     title('Linear closed-loop response from initial tilt (LQI + Kalman)');
     subplot(3,1,2); plot(t, q(3,:)); ylabel('\theta [rad]'); grid on;
     subplot(3,1,3); plot(t, xi);     ylabel('\xi [m·s]'); xlabel('t [s]'); grid on;
     title('Integrator state \xi');
+    saveas(fig_sim, fullfile(results_dir, 'linear_closedloop.png'));
 end
 
 
 %% 7) comparison
-if compare_kalman
+if plot_figures
     pause(T+2)
-    figure
-    
-    subplot(4,1,1)
-    plot(0:h:T, x);
-    hold on
-    plot(0:h:T, x_hat);
-    grid on
-    hold off
-
-    subplot(4,1,2)
-    plot(0:h:T, theta);
-    hold on
-    plot( 0:h:T, theta_hat);
-    grid on
-    hold off
-
-    subplot(4,1,3)
-    plot(0:h:T-h, diff(x)./h);
-    hold on
-    plot( 0:h:T, dx_hat);
-    grid on
-    hold off
-
-    subplot(4,1,4)
-    plot(0:h:T-h, diff(theta)./h);
-    hold on
-    plot( 0:h:T, dtheta_hat);
-    grid on
-    hold off
+    plot_kalman_comparison(x, theta, x_hat, theta_hat, dx_hat, dtheta_hat, h, T, results_dir);
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

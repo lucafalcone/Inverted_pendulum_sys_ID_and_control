@@ -63,7 +63,7 @@ end
 
 % saving parameters
 if save_param
-folder = fullfile(pwd, 'sysID', 'results');
+folder = fullfile(pwd, 'global');
 str = strrep(sprintf('%.3f', mean(fit_vec)), '.', '_');
 filename = fullfile(folder, ['param_', str, '.mat']);
 save(filename, 'param');
