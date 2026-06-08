@@ -1,5 +1,5 @@
 % the following does not account for any Coulomb
-% friction/dead-zone/asymmetry. It should be used just as analytical
+% friction/dead-zone/asymmetry. It is used just as analytical
 % validation for the numerically obtained matrices.
 
 M = param.M;

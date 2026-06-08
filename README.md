@@ -13,4 +13,4 @@ The files **sysID/b_fullSysID.m** and **sysID/c_fullSys_validation.m** are for e
 # Linearization
 Since the control techniques we have to use are linear, first we linearize around the unstable equilibrium.
 The analytical linearization of the simple model is used for comparison with the more accurate one obtained using the simulink linearization tool on a model that uses the EOM in the funciton **sys_EOM_asym.m**.
-The numerical solution has different values specially where the parameter 'c' appears in the analytical solution, this is probably because the dead-zones and Coulomb act "in parallel" to the cart friction to oppose motion. 
+The numerical solution has different values specially where the parameter 'c' appears in the analytical solution, this is probably because the dead-zones and Coulomb act "in parallel" to the cart friction to oppose motion.

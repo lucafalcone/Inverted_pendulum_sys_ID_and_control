@@ -1,41 +1,28 @@
-%% LQR + steady-state Kalman design for the inverted pendulum
+%% LQI + steady-state Kalman design for the inverted pendulum
 % Linearizes sysEOM_asym about the UPRIGHT equilibrium,
 % with the cart FORCE F as the control input (motor dead zone inverted
-% downstream in Simulink). Exports K, L, A, B, C and the dead-zone
-% compensation constants for the Simulink model.
+% downstream in Simulink). Exports K (1×5 LQI gain), L, A, B, C and the
+% dead-zone compensation constants for the Simulink model.
+% The 5th state is xi = integral(x_ref - x_hat), cart position error.
 
 clear; clc;
 h = 0.01;
 T = 30;
 
+% add path to the EOM and other functions, assuming this script is in LQI/
+proj_root = fileparts(fileparts(mfilename('fullpath')));
+addpath(fullfile(proj_root, 'LQI', 'functions'));
+
 %% 1) Load identified parameters
-S = load(fullfile('Results', 'param_60_829.mat'));
-% file stores either a struct 'param' or the raw fields - handle both
-if isfield(S, 'param')
-    p = S.param;
-else
-    p = S;
-end
-
-M     = p.M;
-m     = p.m;
-b     = p.b;     % pendulum pivot friction
-c     = p.c;     % cart friction
-l     = p.l;
-k_pos = p.k_pos;
-k_neg = p.k_neg;
-d_pos = p.d_pos;
-d_neg = p.d_neg;
-Fc    = p.Fc;    % Coulomb cart friction (ignored in linearization or it would be almost "discontinuous" at the equilibrium)
-
-g = 9.81;
+p = load(fullfile(proj_root, 'sysID', 'results', 'param_60_829.mat')).param;
+p.g = 9.81;
 
 %% 2) Linearize about the upright equilibrium
 % State: z = [x; v; phi; omega], with phi = theta - pi (so phi = 0 is upright)
 % Input: F (force on cart, in Newtons). Outputs: y = [x; phi].
 % Numerical Jacobian of the continuous EOM with F as input.
 
-f = @(z, F) eom_force(z, F, M, m, b, c, l);
+f = @(z, F) eom_force(z, F, p.M, p.m, p.b, p.c, p.l);
 
 z_eq = [0; 0; 0; 0];
 F_eq = 0;
@@ -47,31 +34,41 @@ for i = 1:4
     A(:,i) = (f(z_eq+dz, F_eq) - f(z_eq-dz, F_eq)) / (2*eps_j);
 end
 B = (f(z_eq, F_eq+eps_j) - f(z_eq, F_eq-eps_j)) / (2*eps_j);
-
 C = [1 0 0 0;
      0 0 1 0];
 D = zeros(2,1);
 
 sys_c = ss(A, B, C, D);
-fprintf('Open-loop poles (continuous):\n'); disp(eig(A));
+sys_d = c2d(sys_c, h);
+fprintf('Open-loop poles (continuous):\n'); disp(eig(sys_c.A));
+fprintf('Open-loop poles (discrete):\n'); disp(eig(sys_d.A));
 
-%% 3) LQR design (continuous)
-% Tune these. Heavy weight on phi keeps the pendulum upright; small weight
-% on x prevents drift but slowly. R penalizes force effort.
-Q_lqr = diag([ 30      0.1     200     1   ]);   % [x  v  phi  omega]
-R_lqr =  3;                                    % force penalty
+%% 3) LQI design (discrete, on augmented system)
+% Augment the 4-state plant with xi = integral(x_ref - x_hat).
+% xi_dot = x_ref - x = -x  (x_ref = 0), so the integrator removes
+% steady-state cart-position error without changing the pendulum design.
+C_x   = C(1,:);                    % [1 0 0 0] — selects cart position
+A_aug = [A,    zeros(4,1);
+         -C_x, 0          ];       % 5×5 augmented A
+B_aug = [B; 0];                    % 5×1 augmented B
 
-K = lqr(A, B, Q_lqr, R_lqr);
-fprintf('LQR gain K (force = -K * [x;v;phi;omega]):\n'); disp(K);
-fprintf('Closed-loop poles (A - B*K):\n'); disp(eig(A - B*K));
+sys_aug_c = ss(A_aug, B_aug, eye(5), zeros(5,1));
+sys_aug_d = c2d(sys_aug_c, h);     % ZOH discretisation
+
+% Tune weights. The last diagonal entry weights the integral state xi.
+Q_lqi = diag([30, 0.1, 200, 1, 5]);   % [x  v  theta  omega  xi]
+R_lqi = 3;                             % force penalty (same as before)
+
+K_lqi = dlqr(sys_aug_d.A, sys_aug_d.B, Q_lqi, R_lqi);   % 1×5
+
+fprintf('LQI gain K_lqi (F = -K_lqi * [x; v; theta; omega; xi]):\n'); disp(K_lqi);
+fprintf('Closed-loop poles (augmented discrete):\n');
+disp(eig(sys_aug_d.A - sys_aug_d.B * K_lqi));
 
 %% 4) Kalman filter (steady-state, continuous LQE)
-% Measure encoder noise on the stationary rig and put the variances here.
-% Until then, start from a sensible guess (encoder resolution ~ 1e-4 m,
-% ~ 1e-4 rad standard deviation).
-sigma_x     = 1e-4;     % [m]   - REPLACE with measured std of x
-sigma_theta = 1e-4;     % [rad] - REPLACE with measured std of theta
-R_kf = diag([sigma_x^2, sigma_theta^2]);
+% Quantization noise: sigma^2 = delta^2/12
+% delta_x = 5.9e-5 m/count, delta_theta = 1.534e-3 rad/count (inferred from data)
+R_kf = diag([2.95e-10, 1.96e-7]);
 
 % Process noise: treat unmodeled accelerations as white noise entering v
 % and omega. Tune q_v, q_w by comparing the estimated velocities against
@@ -90,20 +87,23 @@ sys_kf = ss(A, [B G], C, [D H]);
 fprintf('Kalman gain L:\n'); disp(L);
 fprintf('Observer poles (A - L*C):\n'); disp(eig(A - L*C));
 
-%% 5) Dead-zone compensation constants (used in Simulink)
+%% 5) Save controller + observer for Simulink 
+ctrl.h = h;
+ctrl.T = T;
+% Dead-zone compensation constants (used in Simulink)
 % LQR commands a force F_cmd. Invert the motor map:
 %   F_cmd >= 0  ->  u = F_cmd/k_pos + d_pos
 %   F_cmd <  0  ->  u = F_cmd/k_neg - d_neg
 % A small bias near F_cmd = 0 keeps the cart from chattering; pick a
 % threshold like F_dead = 0.02 N if needed.
-ctrl.k_pos = k_pos;
-ctrl.k_neg = k_neg;
-ctrl.d_pos = d_pos;
-ctrl.d_neg = d_neg;
+ctrl.k_pos = p.k_pos;
+ctrl.k_neg = p.k_neg;
+ctrl.d_pos = p.d_pos;
+ctrl.d_neg = p.d_neg;
 
-%% 6) Save for Simulink
+% other stuff to save for Simulink
 ctrl.A = A; ctrl.B = B; ctrl.C = C;
-ctrl.K = K; ctrl.L = L;
+ctrl.K = K_lqi; ctrl.L = L;   % K is now 1×5 (LQI); Simulink Gain block reads K
 % Encoder convention: theta_enc = 0 at upright (opposite zero from EOM).
 % So phi (deviation from upright, used by the linearized model) is just
 % theta_enc, wrapped to [-pi, pi]. Verify rotation direction matches the
@@ -112,25 +112,39 @@ ctrl.K = K; ctrl.L = L;
 ctrl.theta_eq    = 0;          % subtract from encoder theta to get phi
 ctrl.theta_sign  = +1;         % set to -1 if encoder rotation is flipped
 ctrl.x_eq        = 0;
-ctrl.Q_lqr = Q_lqr; ctrl.R_lqr = R_lqr;
+ctrl.Q_lqi = Q_lqi; ctrl.R_lqi = R_lqi;
 ctrl.Q_kf  = Q_kf;  ctrl.R_kf  = R_kf;
 
-out_file = fullfile('sysID','results', 'lqr_kalman.mat');
+out_file = fullfile(proj_root, 'LQI', 'lqr_kalman.mat');
 save(out_file, '-struct', 'ctrl');
 fprintf('\nSaved controller + observer to %s\n', out_file);
 
-%% 7) Quick sanity sim of the linear closed loop
-t = 0:0.005:5;
+%% 6) Quick sanity sim of the linear closed loop (discrete LQI + Kalman)
+t  = 0:h:5;
+N  = length(t);
 z0 = [0; 0; 0.15; 0];          % 0.15 rad ~ 8.6 deg initial tilt
-A_cl = [A - B*K,    B*K;
-        zeros(4),   A - L*C];
-% lifted state: [true state; estimation error]. Estimator gets correct y.
-sys_cl = ss(A_cl, zeros(8,1), [C zeros(2,4)], 0);
-[y_sim, ~, x_sim] = initial(sys_cl, [z0; z0], t);   % start with full err
 
-if 0
-figure('Name','Linear LQR+KF closed loop');
-subplot(2,1,1); plot(t, y_sim(:,1)); ylabel('x [m]'); grid on;
-title('Linear closed-loop response from initial tilt');
-subplot(2,1,2); plot(t, y_sim(:,2)); ylabel('\phi [rad]'); xlabel('t [s]'); grid on;
+Ad = sys_d.A; Bd = sys_d.B; Cd = sys_d.C;
+L_d = dlqe(Ad, eye(4), Cd, Q_kf, R_kf);
+
+K1 = K_lqi(1:4);   % gain on the 4 plant states
+K5 = K_lqi(5);     % integral gain
+
+q     = zeros(4, N);  q(:,1) = z0;   % true plant state
+q_hat = zeros(4, N);                  % Kalman estimate (starts at zero = full error)
+xi    = zeros(1, N);                  % cart-position integrator state
+
+for k = 1:N-1
+    y_k         = Cd * q(:,k);                            % noiseless measurement
+    F_k         = -K1 * q_hat(:,k) - K5 * xi(k);         % LQI control law
+    q(:,k+1)    = Ad * q(:,k) + Bd * F_k;                 % true dynamics
+    q_hat(:,k+1)= (Ad - L_d*Cd)*q_hat(:,k) + Bd*F_k + L_d*y_k;  % Kalman
+    xi(k+1)     = xi(k) + h * (-q_hat(1,k));              % xi_dot = x_ref - x_hat
 end
+
+figure('Name','Linear LQI+KF closed loop');
+subplot(3,1,1); plot(t, q(1,:)); ylabel('x [m]'); grid on;
+title('Linear closed-loop response from initial tilt (LQI + Kalman)');
+subplot(3,1,2); plot(t, q(3,:)); ylabel('\theta [rad]'); grid on;
+subplot(3,1,3); plot(t, xi);     ylabel('\xi [m·s]'); xlabel('t [s]'); grid on;
+title('Integrator state \xi');
