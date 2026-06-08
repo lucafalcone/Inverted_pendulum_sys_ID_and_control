@@ -8,6 +8,7 @@
 clear; clc;
 h = 0.01;
 T = 30;
+run_setup = 1; % set to 0 to run a simulation instead
 
 % add path to the EOM and other functions, assuming this script is in LQI/
 proj_root = fileparts(fileparts(mfilename('fullpath')));
@@ -103,15 +104,7 @@ ctrl.d_neg = p.d_neg;
 
 % other stuff to save for Simulink
 ctrl.A = A; ctrl.B = B; ctrl.C = C;
-ctrl.K = K_lqi; ctrl.L = L;   % K is now 1×5 (LQI); Simulink Gain block reads K
-% Encoder convention: theta_enc = 0 at upright (opposite zero from EOM).
-% So phi (deviation from upright, used by the linearized model) is just
-% theta_enc, wrapped to [-pi, pi]. Verify rotation direction matches the
-% EOM before trusting K; flip sign of phi (and of omega_hat feedback) if
-% it doesn't.
-ctrl.theta_eq    = 0;          % subtract from encoder theta to get phi
-ctrl.theta_sign  = +1;         % set to -1 if encoder rotation is flipped
-ctrl.x_eq        = 0;
+ctrl.K = K_lqi; ctrl.L = L;
 ctrl.Q_lqi = Q_lqi; ctrl.R_lqi = R_lqi;
 ctrl.Q_kf  = Q_kf;  ctrl.R_kf  = R_kf;
 
@@ -119,32 +112,38 @@ out_file = fullfile(proj_root, 'LQI', 'lqr_kalman.mat');
 save(out_file, '-struct', 'ctrl');
 fprintf('\nSaved controller + observer to %s\n', out_file);
 
-%% 6) Quick sanity sim of the linear closed loop (discrete LQI + Kalman)
-t  = 0:h:5;
-N  = length(t);
-z0 = [0; 0; 0.15; 0];          % 0.15 rad ~ 8.6 deg initial tilt
+%% 6) Run setup or simulate to check the design
+if run_setup
+    mname = 'inverted_pendulum_template';
+    play_run(mname)
+else
+    % Quick sanity sim of the linear closed loop (discrete LQI + Kalman)
+    t  = 0:h:5;
+    N  = length(t);
+    z0 = [0; 0; 0.15; 0];          % 0.15 rad ~ 8.6 deg initial tilt
 
-Ad = sys_d.A; Bd = sys_d.B; Cd = sys_d.C;
-L_d = dlqe(Ad, eye(4), Cd, Q_kf, R_kf);
+    Ad = sys_d.A; Bd = sys_d.B; Cd = sys_d.C;
+    L_d = dlqe(Ad, eye(4), Cd, Q_kf, R_kf);
 
-K1 = K_lqi(1:4);   % gain on the 4 plant states
-K5 = K_lqi(5);     % integral gain
+    K1 = K_lqi(1:4);   % gain on the 4 plant states
+    K5 = K_lqi(5);     % integral gain
 
-q     = zeros(4, N);  q(:,1) = z0;   % true plant state
-q_hat = zeros(4, N);                  % Kalman estimate (starts at zero = full error)
-xi    = zeros(1, N);                  % cart-position integrator state
+    q     = zeros(4, N);  q(:,1) = z0;   % true plant state
+    q_hat = zeros(4, N);                  % Kalman estimate (starts at zero = full error)
+    xi    = zeros(1, N);                  % cart-position integrator state
 
-for k = 1:N-1
-    y_k         = Cd * q(:,k);                            % noiseless measurement
-    F_k         = -K1 * q_hat(:,k) - K5 * xi(k);         % LQI control law
-    q(:,k+1)    = Ad * q(:,k) + Bd * F_k;                 % true dynamics
-    q_hat(:,k+1)= (Ad - L_d*Cd)*q_hat(:,k) + Bd*F_k + L_d*y_k;  % Kalman
-    xi(k+1)     = xi(k) + h * (-q_hat(1,k));              % xi_dot = x_ref - x_hat
+    for k = 1:N-1
+        y_k         = Cd * q(:,k);                            % noiseless measurement
+        F_k         = -K1 * q_hat(:,k) - K5 * xi(k);         % LQI control law
+        q(:,k+1)    = Ad * q(:,k) + Bd * F_k;                 % true dynamics
+        q_hat(:,k+1)= (Ad - L_d*Cd)*q_hat(:,k) + Bd*F_k + L_d*y_k;  % Kalman
+        xi(k+1)     = xi(k) + h * (-q_hat(1,k));              % xi_dot = x_ref - x_hat
+    end
+
+    figure('Name','Linear LQI+KF closed loop');
+    subplot(3,1,1); plot(t, q(1,:)); ylabel('x [m]'); grid on;
+    title('Linear closed-loop response from initial tilt (LQI + Kalman)');
+    subplot(3,1,2); plot(t, q(3,:)); ylabel('\theta [rad]'); grid on;
+    subplot(3,1,3); plot(t, xi);     ylabel('\xi [m·s]'); xlabel('t [s]'); grid on;
+    title('Integrator state \xi');
 end
-
-figure('Name','Linear LQI+KF closed loop');
-subplot(3,1,1); plot(t, q(1,:)); ylabel('x [m]'); grid on;
-title('Linear closed-loop response from initial tilt (LQI + Kalman)');
-subplot(3,1,2); plot(t, q(3,:)); ylabel('\theta [rad]'); grid on;
-subplot(3,1,3); plot(t, xi);     ylabel('\xi [m·s]'); xlabel('t [s]'); grid on;
-title('Integrator state \xi');
