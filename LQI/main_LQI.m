@@ -7,7 +7,7 @@
 
 clear; clc;
 h = 0.01;
-T = 10;
+T = 15;
 run_setup = 1;    % 1 = build and run on hardware, 0 = design only
 plot_figures = 1; % 1 = save Kalman comparison and augmented state plots after hardware run
 
@@ -15,7 +15,6 @@ timestamp = char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'));
 
 % add path to the EOM and other functions, assuming this script is in LQI/
 proj_root = fileparts(fileparts(mfilename('fullpath')));
-addpath(fullfile(proj_root, 'LQI', 'functions'));
 addpath(fullfile(proj_root, 'global'));
 
 results_dir = fullfile(proj_root, 'LQI', 'results');
@@ -67,8 +66,8 @@ sys_aug_c = ss(A_aug, B_aug, eye(5), zeros(5,1));
 sys_aug_d = c2d(sys_aug_c, h);     % ZOH discretisation
 
 % Tune weights. The last diagonal entry weights the integral state xi.
-Q_lqi = diag([30, 0.1, 200, 1, 1000]);   % [x  v  theta  omega  xi]
-R_lqi = 20;                             % force penalty
+Q_lqi = diag([30, 0.1, 200, 1, 100]);   % [x  v  theta  omega  xi]
+R_lqi = 10;                             % force penalty
 
 
 K_lqi = dlqr(sys_aug_d.A, sys_aug_d.B, Q_lqi, R_lqi);   % 1×5
@@ -109,6 +108,7 @@ ctrl.k_pos = p.k_pos; k_pos = p.k_pos;
 ctrl.k_neg = p.k_neg; k_neg = p.k_neg;
 ctrl.d_pos = p.d_pos; d_pos = p.d_pos;
 ctrl.d_neg = p.d_neg; d_neg = p.d_neg;
+ctrl.Fc = p.Fc; Fc = p.Fc;
 
 % other stuff to save for Simulink
 ctrl.A = sys_d.A; ctrl.B = sys_d.B; ctrl.C = sys_d.C;
@@ -125,79 +125,34 @@ fprintf('\nSaved controller + observer to %s\n', out_file);
 fprintf('Timestamped copy saved to %s\n', ts_ctrl_file);
 
 %% 6) Run setup or simulate to check the design
-if run_setup
-    mname = 'inverted_pendulum_LQR';
-    play_run(mname);
+mname = 'inverted_pendulum_LQI';
+play_run(mname);
 
-    fprintf('Waiting for experiment to finish...\n');
-    while ~strcmp(get_param(mname, 'SimulationStatus'), 'stopped')
-        pause(1);
-    end
-    fprintf('Experiment complete.\n');
+fprintf('Waiting for experiment to finish...\n');
+while ~strcmp(get_param(mname, 'SimulationStatus'), 'stopped')
+    pause(1);
+end
+fprintf('Experiment complete.\n');
 
-    % Collect workspace variables written by the To Workspace blocks
-    results_hw.t          = 0:h:T;
-    results_hw.x          = evalin('base', 'x');
-    results_hw.theta      = evalin('base', 'theta');
-    results_hw.x_hat      = evalin('base', 'x_hat');
-    results_hw.theta_hat  = evalin('base', 'theta_hat');
-    results_hw.dx_hat     = evalin('base', 'dx_hat');
-    results_hw.dtheta_hat = evalin('base', 'dtheta_hat');
+% Collect workspace variables written by the To Workspace blocks
+results_hw.t          = 0:h:T;
+results_hw.x          = evalin('base', 'x');
+results_hw.theta      = evalin('base', 'theta');
+results_hw.x_hat      = evalin('base', 'x_hat');
+results_hw.theta_hat  = evalin('base', 'theta_hat');
+results_hw.dx_hat     = evalin('base', 'dx_hat');
+results_hw.dtheta_hat = evalin('base', 'dtheta_hat');
 
-    res_file = fullfile(run_dir, ['run_hw_' timestamp '.mat']);
-    save(res_file, '-struct', 'results_hw');
-    fprintf('Hardware results saved to %s\n', res_file);
+res_file = fullfile(run_dir, ['run_hw_' timestamp '.mat']);
+save(res_file, '-struct', 'results_hw');
+fprintf('Hardware results saved to %s\n', res_file);
 
-    if plot_figures
-        plot_kalman_comparison(results_hw.x, results_hw.theta, ...
-            results_hw.x_hat, results_hw.theta_hat, ...
-            results_hw.dx_hat, results_hw.dtheta_hat, ...
-            h, T, run_dir, timestamp);
-        plot_augmented_states(results_hw.x_hat, results_hw.dx_hat, ...
-            results_hw.theta_hat, results_hw.dtheta_hat, ...
-            h, T, run_dir, timestamp);
-    end
-else
-    % Quick sanity sim of the linear closed loop (discrete LQI + Kalman)
-    t_sim = 0:h:5; %#ok<UNRCH>
-    Ns    = length(t_sim);
-    z0    = [0; 0; 0.15; 0];          % 0.15 rad ~ 8.6 deg initial tilt
-
-    Ad = sys_d.A; Bd = sys_d.B; Cd = sys_d.C;
-    L_d = dlqe(Ad, eye(4), Cd, Q_kf, R_kf);
-
-    K1 = K_lqi(1:4);   % gain on the 4 plant states
-    K5 = K_lqi(5);     % integral gain
-
-    q     = zeros(4, Ns);  q(:,1) = z0;
-    q_hat = zeros(4, Ns);
-    xi    = zeros(1, Ns);
-    u_hist = zeros(1, Ns-1);
-
-    for k = 1:Ns-1
-        y_k          = Cd * q(:,k);
-        F_k          = -K1 * q_hat(:,k) - K5 * xi(k);
-        q(:,k+1)     = Ad * q(:,k) + Bd * F_k;
-        q_hat(:,k+1) = (Ad - L_d*Cd)*q_hat(:,k) + Bd*F_k + L_d*y_k;
-        xi(k+1)      = xi(k) + h * (-q_hat(1,k));
-        u_hist(k)    = F_k;
-    end
-
-    results_sim.t     = t_sim;
-    results_sim.x     = q(1,:);
-    results_sim.v     = q(2,:);
-    results_sim.theta = q(3,:);
-    results_sim.omega = q(4,:);
-    results_sim.xi    = xi;
-    results_sim.u     = u_hist;
-    res_file = fullfile(run_dir, ['run_sim_' timestamp '.mat']);
-    save(res_file, '-struct', 'results_sim');
-    fprintf('Simulation results saved to %s\n', res_file);
-
-    fig_sim = figure('Name', 'Linear LQI+KF closed loop');
-    subplot(3,1,1); plot(t_sim, q(1,:)); ylabel('x [m]'); grid on;
-    title('Linear closed-loop response from initial tilt (LQI + Kalman)');
-    subplot(3,1,2); plot(t_sim, q(3,:)); ylabel('\theta [rad]'); grid on;
-    subplot(3,1,3); plot(t_sim, xi);     ylabel('\xi [m\cdots]'); xlabel('t [s]'); grid on;
-    saveas(fig_sim, fullfile(run_dir, ['linear_closedloop_' timestamp '.png']));
+if plot_figures
+    plot_kalman_comparison(results_hw.x, results_hw.theta, ...
+        results_hw.x_hat, results_hw.theta_hat, ...
+        results_hw.dx_hat, results_hw.dtheta_hat, ...
+        h, T, run_dir, timestamp);
+    plot_augmented_states(results_hw.x_hat, results_hw.dx_hat, ...
+        results_hw.theta_hat, results_hw.dtheta_hat, ...
+        h, T, run_dir, timestamp);
 end

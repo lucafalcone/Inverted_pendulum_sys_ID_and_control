@@ -1,4 +1,4 @@
-shall_plot = 0;
+shall_plot = 1;
 save_param = 1;
 N = 500;
 skip = 500;

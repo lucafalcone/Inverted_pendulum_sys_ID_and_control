@@ -12,6 +12,7 @@ t_vec = 0:h:T;
 xi_est = cumsum(-x_hat) * h;   % xi_dot = -x_hat  (x_ref = 0)
 
 fig_states = figure('Name', 'Augmented state trajectories');
+% subplot(5,1,1); plot(t_vec, x_hat, t_vec,ref_signal);      ylabel('x [m]');           grid on;
 subplot(5,1,1); plot(t_vec, x_hat);      ylabel('x [m]');           grid on;
 title('Augmented state trajectories');
 subplot(5,1,2); plot(t_vec, dx_hat);     ylabel('v [m/s]');         grid on;

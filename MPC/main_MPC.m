@@ -4,17 +4,17 @@
 % State: z = [x; v; theta; omega], theta=0 upright. Input: F (force on cart).
 
 clear; clc;
-h = 0.01;   % sample time [s]
-T = 20;     % experiment duration [s]
+h = 0.05;   % sample time [s]
+T = 10;     % experiment duration [s]
 timestamp = char(datetime('now', 'Format', 'yyyyMMdd_HHmmss'));
 
 % MPC tuning
-params.Q = diag([30, 0.1, 200, 1]);  % [x  v  theta  omega]
-params.R = 0.5;
+params.Q = diag([50, 0.1, 100, 1]);  % [x  v  theta  omega]
+params.R = 5;
 limits.u_max = 4;    % max force [N] (~1/3 of the input to the plant)
-limits.x_max = 0.1;  % cart rail limit [m]
+limits.x_max = 0.2;  % cart rail limit [m]
 limits.rho   = 1000; % soft-constraint penalty (increase to enforce harder)
-N = 35;              % prediction horizon (steps)
+N = 30;              % prediction horizon (steps)
 
 %% Paths
 proj_root = fileparts(fileparts(mfilename('fullpath')));
@@ -91,10 +91,12 @@ fprintf('Observer poles (A - L*C):\n'); disp(eig(A - L*C));
 % dim (MPC MATLAB Function block) plus motor dead-zone constants.
 ctrl.h    = h;
 ctrl.T    = T;
+ctrl.N    = N;
 ctrl.k_pos = p.k_pos; k_pos = p.k_pos;
 ctrl.k_neg = p.k_neg; k_neg = p.k_neg;
 ctrl.d_pos = p.d_pos; d_pos = p.d_pos;
 ctrl.d_neg = p.d_neg; d_neg = p.d_neg;
+ctrl.Fc = p.Fc; Fc = p.Fc;
 ctrl.A    = A; 
 ctrl.B    = B;
 ctrl.C    = C;
