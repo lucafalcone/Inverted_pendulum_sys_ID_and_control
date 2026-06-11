@@ -1,0 +1,119 @@
+%% SYSTLC: Generic Real-Time Target \
+%%    TMF: rtcon_pendulum_vc_usb2_x64.tmf MAKE: make_rtw EXTMODE: rtcon_ext_comm 
+%%
+%% $RCSfile: grt.tlc,v $
+%% $Revision: 1.31.4.9 $
+%% $Date: 2010/04/05 20:13:50 $
+%%
+%% Copyright 1994-2010 The MathWorks, Inc.
+%% Abstract: Generic real-time system target file.
+%%
+%selectfile NULL_FILE
+
+%assign TargetType = "RT"
+%assign Language   = "C"
+%assign GenRTModel = 1
+%%    %assign _GRT_      = 1
+
+%assign MatFileLogging = 1
+
+
+%include "codegenentry.tlc"
+
+%openfile fl = "%<CompiledModel.Name>.c", "a"
+
+#include <stdio.h>
+
+/* Final time from "Simulation Parameters"   */
+real_T finaltime = %<CompiledModel.StopTime>;
+real_T StepSize  = %<CompiledModel.FundamentalStepSize>;
+////////////////////////////////////////////////
+//
+//  Return compilation date and time
+//
+char *GetDateAndTime( void ) {
+  static char AuxStr[ 128 ];
+  sprintf( AuxStr, "%s %s", __DATE__, __TIME__ );
+  return( AuxStr );
+}
+
+%closefile fl
+
+
+%% The contents between 'BEGIN_RTW_OPTIONS' and 'END_RTW_OPTIONS' in this file
+%% are used to maintain backward compatibility to R13 and preR13 custom target 
+%% file only.  If you want to use this file as a template to develop your
+%% own system target file, you need to remove the 'CONFIGSET_TARGET_COMPONENT'
+%% section at the end of this file.
+%%
+/%
+  BEGIN_RTW_OPTIONS
+
+  rtwoptions(1).prompt         = 'RT-CON options';
+  rtwoptions(1).type           = 'Category';
+  rtwoptions(1).enable         = 'on';  
+  rtwoptions(1).default        = 7;   % number of items under this category excluding this one.
+  
+  rtwoptions(1).popupstrings  = '';
+  rtwoptions(1).tlcvariable   = '';
+  rtwoptions(1).tooltip       = '';
+  rtwoptions(1).callback      = '';
+  rtwoptions(1).opencallback  = '';
+  rtwoptions(1).closecallback = '';
+  rtwoptions(1).makevariable  = '';
+
+  rtwoptions(2).prompt         = 'MAT-file variable name modifier';
+  rtwoptions(2).type           = 'Popup';
+  rtwoptions(2).default        = 'rt_';
+  rtwoptions(2).popupstrings   = 'rt_|_rt|none';
+  rtwoptions(2).tlcvariable    = 'LogVarNameModifier';
+  rtwoptions(2).tooltip        =  ['prefix rt_ to variable name,', sprintf('\n'), ...
+                                   'append _rt to variable name,', sprintf('\n'), ...
+                                   'or no modification'];
+
+  rtwoptions(3).prompt         = 'Display start-up message';
+  rtwoptions(3).type           = 'Checkbox';
+  rtwoptions(3).default        = 'off';
+  rtwoptions(3).tlcvariable    = 'StartupMessage';
+  rtwoptions(3).makevariable   = 'STARTUP_MESSAGE';
+  rtwoptions(3).tooltip        = ['Display message when executable loaded'];
+
+  rtwoptions(4).prompt         = 'Append RT-DAC/USB drivers';
+  rtwoptions(4).type           = 'Checkbox';
+  rtwoptions(4).default        = 'off';
+  rtwoptions(4).tlcvariable    = 'LinkRTDACUSB';
+  rtwoptions(4).makevariable   = 'LINK_RTDAC_USB';
+  rtwoptions(4).tooltip        = ['Append RT-DAC/USB drivers to the real-time executable file'];
+
+  rtwoptions(5).prompt         = 'Append RT-DAC/PCI drivers';
+  rtwoptions(5).type           = 'Checkbox';
+  rtwoptions(5).default        = 'off';
+  rtwoptions(5).tlcvariable    = 'LinkRTDACPCI';
+  rtwoptions(5).makevariable   = 'LINK_RTDAC_PCI';
+  rtwoptions(5).tooltip        = ['Append RT-DAC/USB drivers to the real-time executable file'];
+
+  rtwoptions(6).prompt         = 'Use HIGH_PRIORITY class';
+  rtwoptions(6).type           = 'Checkbox';
+  rtwoptions(6).default        = 'off';
+  rtwoptions(6).tlcvariable    = 'Use_HIGH_PRIORITY';
+  rtwoptions(6).makevariable   = 'USE_HIGH_PRIORITY';
+  rtwoptions(6).tooltip        = ['Boost the priority to the HIGH_PRIORITY class'];
+
+  rtwoptions(7).prompt         = 'Use REALTIME_PRIORITY class';
+  rtwoptions(7).type           = 'Checkbox';
+  rtwoptions(7).default        = 'off';
+  rtwoptions(7).tlcvariable    = 'Use_REALTIME_PRIORITY';
+  rtwoptions(7).makevariable   = 'USE_REALTIME_PRIORITY';
+  rtwoptions(7).tooltip        = ['Boost the priority to the REALTIME_PRIORITY class'];
+
+  %----------------------------------------%
+  % Configure RTW code generation settings %
+  %----------------------------------------%
+  
+  rtwgensettings.BuildDirSuffix = '_RTCON';
+  rtwgensettings.Version        = '1';
+
+  rtwgensettings.DerivedFrom    = 'grt.tlc';
+  
+  END_RTW_OPTIONS 
+ %/
